@@ -2,16 +2,37 @@ package logger
 
 import "fmt"
 
-var simpleLogger = SimpleLogger{LogLevelWarn}
+var simpleLogger = SimpleLogger{LogLevelInfo}
+
+func SetLogLevel(logLevel string) {
+	level := GetLogLevel(logLevel)
+	fmt.Println("Log level set to: ", logLevel)
+	simpleLogger = SimpleLogger{level}
+}
+
+func GetLogLevel(logLevel string) LogLevel {
+	switch logLevel {
+	case "trace":
+		return LogLevelTrace
+	case "debug":
+		return LogLevelDebug
+	case "info":
+		return LogLevelInfo
+	case "warn":
+		return LogLevelWarn
+	case "error":
+		return LogLevelError
+	case "fatal":
+		return LogLevelFatal
+	}
+	return LogLevelInfo
+}
 
 type Logger interface {
-	Trace(v ...interface{})
-	Tracef(format string, v ...interface{})
 	Debug(v ...interface{})
 	Debugf(format string, v ...interface{})
 	Info(v ...interface{})
 	Infof(format string, v ...interface{})
-	DebugfNoCR(format string, v ...interface{})
 	Warn(v ...interface{})
 	Warnf(format string, v ...interface{})
 	Error(v ...interface{})
@@ -74,12 +95,6 @@ func (sl *SimpleLogger) Info(v ...interface{}) {
 		fmt.Println(arr...)
 	}
 }
-func (sl *SimpleLogger) DebugfNoCR(format string, v ...interface{}) {
-	if sl.level <= LogLevelDebug {
-		fmt.Printf("[Info ] "+format, v...)
-	}
-}
-
 func (sl *SimpleLogger) Infof(format string, v ...interface{}) {
 	if sl.level <= LogLevelInfo {
 		fmt.Printf("[Info ] "+format+"\n", v...)
@@ -128,17 +143,18 @@ func (sl *SimpleLogger) Fatalf(format string, v ...interface{}) {
 		fmt.Printf("[Fatal] "+format+"\n", v)
 	}
 }
-func Trace(v ...interface{}) {
-	simpleLogger.Trace(v...)
-}
-func Tracef(format string, v ...interface{}) {
-	simpleLogger.Tracef(format, v...)
-}
 
 func Debug(v ...interface{}) {
 	simpleLogger.Debug(v...)
 }
 func Debugf(format string, v ...interface{}) {
+	simpleLogger.Debugf(format, v...)
+}
+
+func Trace(v ...interface{}) {
+	simpleLogger.Trace(v...)
+}
+func Tracef(format string, v ...interface{}) {
 	simpleLogger.Tracef(format, v...)
 }
 
@@ -148,9 +164,7 @@ func Info(v ...interface{}) {
 func Infof(format string, v ...interface{}) {
 	simpleLogger.Infof(format, v...)
 }
-func DebugfNoCR(format string, v ...interface{}) {
-	simpleLogger.DebugfNoCR(format, v...)
-}
+
 func Warn(v ...interface{}) {
 	simpleLogger.Warn(v...)
 }

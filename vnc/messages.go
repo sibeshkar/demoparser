@@ -119,7 +119,7 @@ func (*FramebufferUpdate) Read(c Conn) (ServerMessage, error) {
 
 	for i := uint16(0); i < msg.NumRect; i++ {
 		rect := NewRectangle()
-		logger.DebugfNoCR("----------RECT %d----------", i)
+		logger.Debugf("----------RECT %d----------", i)
 
 		if err := rect.Read(c); err != nil {
 			return nil, err

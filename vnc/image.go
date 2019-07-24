@@ -186,7 +186,7 @@ func (rect *Rectangle) ReadProto(fbrect *pb.Rectangle, rbs *ProtoConn) error {
 		}
 	}
 
-	return rect.Enc.Read(rbs, rect)
+	// return rect.Enc.Read(rbs, rect)
 
 	return nil
 }

@@ -1,14 +1,16 @@
 package main
 
 import (
+	"flag"
+	"image/jpeg"
 	"os"
+
 	//"path/filepath"
 	"time"
 	//"fmt"
-	"image/jpeg"
 
+	"github.com/sibeshkar/demoparser/logger"
 	vnc "github.com/sibeshkar/demoparser/vnc"
-	"github.com/sibeshkar/vncproxy/logger"
 	//"github.com/sibeshkar/vncproxy/logger"
 	//"github.com/amitbet/vnc2video/encoders"
 	//"github.com/amitbet/vnc2video/logger"
@@ -22,11 +24,17 @@ func main() {
 	speedupFactor := 3.0
 	fastFramerate := int(float64(framerate) * speedupFactor)
 
-	if len(os.Args) <= 1 {
+	var logLevel = flag.String("logLevel", "info", "change logging level")
+	var protoFile = flag.String("protoFile", "demo/proto.rbs", "file name of demonstration")
+
+	flag.Parse()
+	logger.SetLogLevel(*logLevel)
+
+	if len(*protoFile) <= 1 {
 		logger.Errorf("please provide a fbs file name")
 		return
 	}
-	if _, err := os.Stat(os.Args[1]); os.IsNotExist(err) {
+	if _, err := os.Stat(*protoFile); os.IsNotExist(err) {
 		logger.Errorf("File doesn't exist", err)
 		return
 	}
@@ -35,8 +43,8 @@ func main() {
 		&vnc.CursorPseudoEncoding{},
 	}
 
-	fbs, err := vnc.NewFbsConn(
-		os.Args[1],
+	fbs, err := vnc.NewProtoConn(
+		*protoFile,
 		encs,
 	)
 	if err != nil {
@@ -90,10 +98,10 @@ func main() {
 		}
 	}()
 
-	msgReader := vnc.NewFBSPlayHelper(fbs)
+	msgReader := vnc.NewProtoPlayer(fbs)
 	//loop over all messages, feed images to video codec:
 	for {
-		_, err := msgReader.ReadFbsMessage(true, speedupFactor)
+		_, err := msgReader.ReadMessage(true, speedupFactor)
 
 		//vcodec.Encode(screenImage.Image)
 		if err != nil {

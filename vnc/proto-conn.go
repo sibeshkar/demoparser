@@ -1,6 +1,7 @@
 package vnc
 
 import (
+	"fmt"
 	"net"
 	"time"
 
@@ -109,20 +110,30 @@ func (h *ProtoPlayHelper) ReadMessage(SyncWithTimestamps bool, SpeedFactor float
 		logger.Errorf("Error occurred while reading ProtoReader", err)
 	}
 
+	fmt.Println()
+
 	parsedFbupdate, err := FrameBufferUpdateRead(fbUpdate, rbs)
 
-	startTimeMsgHandling := time.Now()
+	time.Sleep(1 * time.Second)
 
-	millisSinceStart := int(startTimeMsgHandling.UnixNano()/int64(time.Millisecond)) - h.startTime
-	adjestedTimeStamp := float64(rbs.CurrentTimestamp()) / SpeedFactor
-	millisToSleep := adjestedTimeStamp - float64(millisSinceStart)
+	// startTimeMsgHandling := time.Now()
 
-	if millisToSleep > 0 && SyncWithTimestamps {
+	// millisSinceStart := int(startTimeMsgHandling.UnixNano()/int64(time.Millisecond)) - h.startTime
+	// adjestedTimeStamp := float64(rbs.CurrentTimestamp()) / SpeedFactor
+	// millisToSleep := adjestedTimeStamp - float64(millisSinceStart)
 
-		time.Sleep(time.Duration(millisToSleep) * time.Millisecond)
-	} else if millisToSleep < -400 {
-		logger.Errorf("rendering time is noticeably off, change speedup factor: videoTimeLine: %f, currentTime:%d, offset: %f", adjestedTimeStamp, millisSinceStart, millisToSleep)
-	}
+	// logger.Debugf("millisSinceStart: %v, adjestedTimeStamp: %v, millisToSleep: %v", millisSinceStart, adjestedTimeStamp, millisToSleep)
+
+	// if millisToSleep > 0 && SyncWithTimestamps {
+	// 	logger.Debug("STEP 1")
+
+	// 	time.Sleep(time.Duration(millisToSleep) * time.Millisecond)
+	// } else if millisToSleep < -400 {
+	// 	logger.Debug("STEP 2")
+	// 	logger.Errorf("rendering time is noticeably off, change speedup factor: videoTimeLine: %f, currentTime:%d, offset: %f", adjestedTimeStamp, millisSinceStart, millisToSleep)
+	// }
+
+	logger.Debugf("Error occurred while reading FrameBufferUpdateRead %v", err)
 
 	return parsedFbupdate, err
 
