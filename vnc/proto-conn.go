@@ -1,7 +1,6 @@
 package vnc
 
 import (
-	"fmt"
 	"net"
 	"time"
 
@@ -109,8 +108,6 @@ func (h *ProtoPlayHelper) ReadMessage(SyncWithTimestamps bool, SpeedFactor float
 	if err != nil {
 		logger.Errorf("Error occurred while reading ProtoReader", err)
 	}
-
-	fmt.Println()
 
 	parsedFbupdate, err := FrameBufferUpdateRead(fbUpdate, rbs)
 
