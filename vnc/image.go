@@ -186,9 +186,7 @@ func (rect *Rectangle) ReadProto(fbrect *pb.Rectangle, rbs *ProtoConn) error {
 		}
 	}
 
-	// return rect.Enc.Read(rbs, rect)
-
-	return nil
+	return rect.Enc.ReadBytes(fbrect.GetBytes(), rbs, rect)
 }
 
 // Read unmarshal rectangle from conn

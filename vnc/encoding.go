@@ -89,6 +89,7 @@ type Renderer interface {
 type Encoding interface {
 	Type() EncodingType
 	Read(Conn, *Rectangle) error
+	ReadBytes([]byte, Conn, *Rectangle) error
 	Write(Conn, *Rectangle) error
 	Supported(Conn) bool
 	Reset() error

@@ -9,6 +9,10 @@ func (*DesktopSizePseudoEncoding) Supported(Conn) bool {
 func (*DesktopSizePseudoEncoding) Reset() error {
 	return nil
 }
+
+func (*DesktopSizePseudoEncoding) ReadBytes(b []byte, r Conn, rect *Rectangle) error {
+	return nil
+}
 func (*DesktopSizePseudoEncoding) Type() EncodingType { return EncDesktopSizePseudo }
 
 // Read implements the Encoding interface.

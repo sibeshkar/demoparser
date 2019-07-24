@@ -87,6 +87,26 @@ func (enc *ZRLEEncoding) Read(r Conn, rect *Rectangle) error {
 	return nil
 }
 
+func (enc *ZRLEEncoding) ReadBytes(b []byte, r Conn, rect *Rectangle) error {
+	fmt.Printf("reading ZRLE:%v\n", rect)
+	var err error
+	bytesBuff := bytes.NewBuffer(b)
+
+	if enc.unzipper == nil {
+		enc.unzipper, err = zlib.NewReader(bytesBuff)
+		enc.zippedBuff = bytesBuff
+		if err != nil {
+			return err
+		}
+	} else {
+		enc.zippedBuff.Write(b)
+	}
+	pf := r.PixelFormat()
+	enc.renderZRLE(rect, &pf)
+
+	return nil
+}
+
 func ReadBytes(count int, r io.Reader) ([]byte, error) {
 	buff := make([]byte, count)
 

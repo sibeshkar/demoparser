@@ -13,6 +13,10 @@ func (*DesktopNamePseudoEncoding) Supported(Conn) bool {
 func (*DesktopNamePseudoEncoding) Reset() error {
 	return nil
 }
+
+func (*DesktopNamePseudoEncoding) ReadBytes(b []byte, r Conn, rect *Rectangle) error {
+	return nil
+}
 func (*DesktopNamePseudoEncoding) Type() EncodingType { return EncDesktopNamePseudo }
 
 // Read implements the Encoding interface.
