@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"image"
 
-	"github.com/amitbet/vnc2video/logger"
+	"github.com/sibeshkar/demoparser/logger"
+	pb "github.com/sibeshkar/vncproxy/proto"
 )
 
 //var _ draw.Drawer = (*ServerConn)(nil)
@@ -147,6 +148,47 @@ func (rect *Rectangle) Write(c Conn) error {
 	}
 
 	return rect.Enc.Write(c, rect)
+}
+
+//For Reading Rectangle from proto def
+func (rect *Rectangle) ReadProto(fbrect *pb.Rectangle, rbs *ProtoConn) error {
+	rect.X = uint16(fbrect.GetX())
+	rect.Y = uint16(fbrect.GetY())
+	rect.Width = uint16(fbrect.GetWidth())
+	rect.Height = uint16(fbrect.GetHeight())
+	rect.EncType = EncodingType(fbrect.GetEnc())
+
+	switch rect.EncType {
+	// case EncCopyRect:
+	// 	rect.Enc = &CopyRectEncoding{}
+	// case EncTight:
+	// 	rect.Enc = c.GetEncInstance(rect.EncType)
+	// case EncTightPng:
+	// 	rect.Enc = &TightPngEncoding{}
+	// case EncRaw:
+	// 	if strings.HasPrefix(c.Protocol(), "aten") {
+	// 		rect.Enc = &AtenHermon{}
+	// 	} else {
+	// 		rect.Enc = &RawEncoding{}
+	// 	}
+	case EncDesktopSizePseudo:
+		rect.Enc = &DesktopSizePseudoEncoding{}
+	case EncDesktopNamePseudo:
+		rect.Enc = &DesktopNamePseudoEncoding{}
+	// case EncXCursorPseudo:
+	// 	rect.Enc = &XCursorPseudoEncoding{}
+	// case EncAtenHermon:
+	// 	rect.Enc = &AtenHermon{}
+	default:
+		rect.Enc = rbs.GetEncInstance(rect.EncType)
+		if rect.Enc == nil {
+			return fmt.Errorf("unsupported encoding %s", rect.EncType)
+		}
+	}
+
+	return rect.Enc.Read(rbs, rect)
+
+	return nil
 }
 
 // Read unmarshal rectangle from conn
