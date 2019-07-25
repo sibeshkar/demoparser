@@ -107,17 +107,26 @@ func (h *ProtoPlayHelper) ReadMessage(SyncWithTimestamps bool, SpeedFactor float
 	fbUpdate, err := rbs.ProtoReader.ReadFbUpdate()
 	if err != nil {
 		logger.Errorf("Error occurred while reading ProtoReader", err)
+		return nil, err
+	}
+
+	startTimeMsgHandling := time.Now()
+
+	fbupdateTimestamp := fbUpdate.GetTimestamp()
+
+	millisSinceStart := int(startTimeMsgHandling.UnixNano()/int64(time.Millisecond)) - h.startTime
+
+	adjustedTimeStamp := float64(fbupdateTimestamp) / SpeedFactor
+
+	millisToSleep := adjustedTimeStamp - float64(millisSinceStart)
+
+	logger.Debugf("Time: startTimeMsg: %v, fbupdateTimeStamp: %v, millisSinceStart: %v, adjustedTimestamp: %v, millisToSleep: %v", startTimeMsgHandling, fbupdateTimestamp, millisSinceStart, adjustedTimeStamp, millisToSleep)
+
+	if millisToSleep > 0 {
+		time.Sleep(time.Duration(millisToSleep) * time.Millisecond)
 	}
 
 	parsedFbupdate, err := FrameBufferUpdateRead(fbUpdate, rbs)
-
-	time.Sleep(1 * time.Second)
-
-	// startTimeMsgHandling := time.Now()
-
-	// millisSinceStart := int(startTimeMsgHandling.UnixNano()/int64(time.Millisecond)) - h.startTime
-	// adjestedTimeStamp := float64(rbs.CurrentTimestamp()) / SpeedFactor
-	// millisToSleep := adjestedTimeStamp - float64(millisSinceStart)
 
 	// logger.Debugf("millisSinceStart: %v, adjestedTimeStamp: %v, millisToSleep: %v", millisSinceStart, adjestedTimeStamp, millisToSleep)
 
@@ -130,7 +139,7 @@ func (h *ProtoPlayHelper) ReadMessage(SyncWithTimestamps bool, SpeedFactor float
 	// 	logger.Errorf("rendering time is noticeably off, change speedup factor: videoTimeLine: %f, currentTime:%d, offset: %f", adjestedTimeStamp, millisSinceStart, millisToSleep)
 	// }
 
-	logger.Debugf("Error occurred while reading FrameBufferUpdateRead %v", err)
+	//logger.Debugf("Error occurred while reading FrameBufferUpdateRead %v", err)
 
 	return parsedFbupdate, err
 
