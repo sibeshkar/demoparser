@@ -3,6 +3,7 @@ package vnc
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"io/ioutil"
 	"log"
@@ -21,6 +22,7 @@ type ProtoReader struct {
 	demonstration    *pb.Demonstration
 	currentTimestamp int
 	index            int
+	maxLen           int
 }
 
 func NewProtoReader(filename string) (*ProtoReader, error) {
@@ -33,15 +35,21 @@ func NewProtoReader(filename string) (*ProtoReader, error) {
 	if err := proto.Unmarshal(in, demonstration); err != nil {
 		log.Fatalln("Failed to parse demonstration file:", err)
 	}
+	len := len(demonstration.Fbupdates)
 
-	return &ProtoReader{demonstration: demonstration, index: 0}, err
+	return &ProtoReader{demonstration: demonstration, index: 0, maxLen: len}, err
 }
 
 func (rbs *ProtoReader) ReadFbUpdate() (*pb.FramebufferUpdate, error) {
-	fbupdate := rbs.demonstration.Fbupdates[rbs.index]
-	rbs.currentTimestamp = int(rbs.demonstration.Initmsg.GetStartTime() + fbupdate.GetTimestamp())
-	rbs.index += 1
-	return fbupdate, nil
+	if rbs.index < rbs.maxLen {
+		fbupdate := rbs.demonstration.Fbupdates[rbs.index]
+		rbs.currentTimestamp = int(rbs.demonstration.Initmsg.GetStartTime() + fbupdate.GetTimestamp())
+		rbs.index += 1
+		return fbupdate, nil
+	} else {
+		return nil, errors.New("Out of FB Updates")
+	}
+
 }
 
 func (fbs *ProtoReader) Read(p []byte) (n int, err error) {

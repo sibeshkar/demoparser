@@ -106,7 +106,7 @@ func (h *ProtoPlayHelper) ReadMessage(SyncWithTimestamps bool, SpeedFactor float
 	rbs := h.Conn
 	fbUpdate, err := rbs.ProtoReader.ReadFbUpdate()
 	if err != nil {
-		logger.Errorf("Error occurred while reading ProtoReader", err)
+		logger.Errorf("Error occurred while reading ProtoReader %v", err)
 		return nil, err
 	}
 

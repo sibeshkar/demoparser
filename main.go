@@ -2,6 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"image"
+	"image/draw"
 	"image/jpeg"
 	"os"
 
@@ -11,40 +14,48 @@ import (
 
 	"github.com/sibeshkar/demoparser/logger"
 	vnc "github.com/sibeshkar/demoparser/vnc"
-	//"github.com/sibeshkar/vncproxy/logger"
-	//"github.com/amitbet/vnc2video/encoders"
-	//"github.com/amitbet/vnc2video/logger"
 )
 
-//
-//
+type VNCDemonstration struct {
+	batches []DemoBatch
+}
 
-func main() {
-	framerate := 10
-	speedupFactor := 3.0
-	fastFramerate := int(float64(framerate) * speedupFactor)
+type DemoBatch struct {
+	obs       image.Image
+	done      bool
+	reward    float32
+	info      string
+	timestamp string
+}
 
-	var logLevel = flag.String("logLevel", "info", "change logging level")
-	var protoFile = flag.String("protoFile", "demo/proto.rbs", "file name of demonstration")
+func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedupFactor *float64) error {
 
-	flag.Parse()
-	logger.SetLogLevel(*logLevel)
+	fastFramerate := int(float64(*framerate) * (*speedupFactor))
 
-	if len(*protoFile) <= 1 {
-		logger.Errorf("please provide a fbs file name")
-		return
-	}
-	if _, err := os.Stat(*protoFile); os.IsNotExist(err) {
-		logger.Errorf("File doesn't exist", err)
-		return
-	}
+	protoFile := filename
+	logLevel := "debug"
+
+	// var logLevel = flag.String("logLevel", "info", "change logging level")
+	// var protoFile = flag.String("protoFile", "demo/proto.rbs", "file name of demonstration")
+
+	// flag.Parse()
+	logger.SetLogLevel(logLevel)
+
+	// if len(*protoFile) <= 1 {
+	// 	logger.Errorf("please provide a fbs file name")
+	// 	return nil
+	// }
+	// if _, err := os.Stat(*protoFile); os.IsNotExist(err) {
+	// 	logger.Errorf("File doesn't exist", err)
+	// 	return nil
+	// }
 	encs := []vnc.Encoding{
 		&vnc.ZRLEEncoding{},
 		&vnc.CursorPseudoEncoding{},
 	}
 
 	fbs, err := vnc.NewProtoConn(
-		*protoFile,
+		protoFile,
 		encs,
 	)
 	if err != nil {
@@ -84,13 +95,17 @@ func main() {
 
 			timeTarget := timeStart.Add(frameDuration)
 			timeLeft := timeTarget.Sub(time.Now())
-			f, err := os.Create("imgs/img_" + timeTarget.String() + ".jpg")
-			if err != nil {
-				panic(err)
+
+			writeImageToFile(screenImage.Image, timeTarget)
+
+			batch := DemoBatch{
+				obs:       screenImage.Image,
+				done:      false,
+				reward:    0.0,
+				info:      "{}",
+				timestamp: timeTarget.String(),
 			}
-			defer f.Close()
-			jpeg.Encode(f, screenImage.Image, nil)
-			//.Add(1 * time.Millisecond)
+			vnc_demo.batches = append(vnc_demo.batches, batch) //.Add(1 * time.Millisecond)
 			if timeLeft > 0 {
 				time.Sleep(timeLeft)
 				//logger.Error("sleeping= ", timeLeft)
@@ -101,12 +116,39 @@ func main() {
 	msgReader := vnc.NewProtoPlayer(fbs)
 	//loop over all messages, feed images to video codec:
 	for {
-		_, err := msgReader.ReadMessage(true, speedupFactor)
+		_, err := msgReader.ReadMessage(true, *speedupFactor)
 
 		//vcodec.Encode(screenImage.Image)
 		if err != nil {
-			os.Exit(-1)
+			break
+			//os.Exit(-1)
+
 		}
 		//vcodec.Encode(screenImage)
 	}
+	return err
+
+}
+
+func writeImageToFile(image draw.Image, timeTarget time.Time) {
+	f, err := os.Create("imgs/img_" + timeTarget.String() + ".jpg")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	jpeg.Encode(f, image, nil)
+
+}
+
+func main() {
+
+	var frameRate = flag.Int("fps", 20, "change logging level")
+	var speedup = flag.Float64("speedup", 1.0, "file name of demonstration")
+	flag.Parse()
+	vncDemo := &VNCDemonstration{}
+	err := Process("demo/proto.rbs", vncDemo, frameRate, speedup)
+	if err != nil {
+		logger.Infof("Error while processing %v", err)
+	}
+	fmt.Print(len(vncDemo.batches))
 }
