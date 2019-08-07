@@ -7,13 +7,11 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"os"
-	"path/filepath"
 
 	//"path/filepath"
 	"time"
 	//"fmt"
 
-	"github.com/sibeshkar/demoparser/encoders"
 	"github.com/sibeshkar/demoparser/logger"
 	vnc "github.com/sibeshkar/demoparser/vnc"
 )
@@ -30,12 +28,9 @@ type DemoBatch struct {
 	timestamp string
 }
 
-func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedupFactor *float64) error {
+func Process(serverfile string, clientfile string, vnc_demo *VNCDemonstration, framerate *int, speedupFactor *float64, logLevel string) error {
 
 	fastFramerate := int(float64(*framerate) * (*speedupFactor))
-
-	fbsFile := filename
-	logLevel := "debug"
 
 	logger.SetLogLevel(logLevel)
 
@@ -44,25 +39,35 @@ func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedu
 		&vnc.CursorPseudoEncoding{},
 	}
 
-	fbs, err := vnc.NewFbsConn(
-		fbsFile,
+	obs_fbs, err := vnc.NewFbsConn(
+		serverfile,
 		encs,
 	)
 	if err != nil {
-		logger.Error("failed to open fbs reader:", err)
+		logger.Error("failed to open obs fbs reader:", err)
+		return err
+	}
+
+	event_fbs, err := vnc.NewFbsConn(
+		serverfile,
+		encs,
+	)
+
+	if err != nil {
+		logger.Error("failed to open event fbs reader:", err)
 		return err
 	}
 
 	//launch video encoding process:
-	vcodec := &encoders.X264ImageEncoder{FFMpegBinPath: "/usr/bin/ffmpeg", Framerate: *framerate}
-	//vcodec := &encoders.DV8ImageEncoder{}
-	//vcodec := &encoders.DV9ImageEncoder{}
-	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	logger.Tracef("current dir: %s", dir)
-	go vcodec.Run("./output.mp4")
+	// vcodec := &encoders.X264ImageEncoder{FFMpegBinPath: "/usr/bin/ffmpeg", Framerate: *framerate}
+	// //vcodec := &encoders.DV8ImageEncoder{}
+	// //vcodec := &encoders.DV9ImageEncoder{}
+	// dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	// logger.Tracef("current dir: %s", dir)
+	// go vcodec.Run("./output.mp4")
 
 	//screenImage := image.NewRGBA(image.Rect(0, 0, int(fbs.Width()), int(fbs.Height())))
-	screenImage := vnc.NewVncCanvas(int(fbs.Width()), int(fbs.Height()))
+	screenImage := vnc.NewVncCanvas(int(obs_fbs.Width()), int(obs_fbs.Height()))
 	screenImage.DrawCursor = true // modify for drawing cursor
 
 	for _, enc := range encs {
@@ -81,7 +86,7 @@ func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedu
 		for {
 			timeStart := time.Now()
 
-			vcodec.Encode(screenImage.Image)
+			//vcodec.Encode(screenImage.Image)
 
 			timeTarget := timeStart.Add(frameDuration)
 			timeLeft := timeTarget.Sub(time.Now())
@@ -103,11 +108,13 @@ func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedu
 		}
 	}()
 
-	msgReader := vnc.NewFBSPlayHelper(fbs)
+	obsmsgReader := vnc.NewFBSPlayHelper(obs_fbs)
+	eventmsgReader := vnc.NewFBSPlayHelper(event_fbs)
 	//loop over all messages, feed images to video codec:
 	for {
-		_, err := msgReader.ReadFbsMessage(true, *speedupFactor)
-
+		_, err := obsmsgReader.ReadServerMessage(true, *speedupFactor)
+		msg, err := eventmsgReader.ReadClientMessage(true, *speedupFactor)
+		fmt.Println(msg)
 		//vcodec.Encode(screenImage.Image)
 		if err != nil {
 			break
@@ -135,7 +142,7 @@ func main() {
 	var speedup = flag.Float64("speedup", 1.0, "speedupfactor")
 	flag.Parse()
 	vncDemo := &VNCDemonstration{}
-	err := Process("demo/recording_1565093465/server.rbs", vncDemo, frameRate, speedup)
+	err := Process("demo/recording_1565093465/server.rbs", "demo/recording_1565093465/client.rbs", vncDemo, frameRate, speedup, "info")
 	if err != nil {
 		logger.Infof("Error while processing %v", err)
 	}

@@ -105,6 +105,7 @@ type FBSPlayHelper struct {
 	Conn *FbsConn
 	//Fbs              VncStreamFileReader
 	serverMessageMap map[uint8]ServerMessage
+	clientMessageMap map[uint8]ClientMessage
 	firstSegDone     bool
 	startTime        int
 }
@@ -143,6 +144,10 @@ func NewFBSPlayHelper(r *FbsConn) *FBSPlayHelper {
 	h.serverMessageMap[2] = &Bell{}
 	h.serverMessageMap[3] = &ServerCutText{}
 
+	h.clientMessageMap = make(map[uint8]ClientMessage)
+	h.clientMessageMap[4] = &KeyEvent{}
+	h.clientMessageMap[5] = &PointerEvent{}
+
 	return h
 }
 
@@ -166,7 +171,7 @@ func NewFBSPlayHelper(r *FbsConn) *FBSPlayHelper {
 // 	return nil
 // }
 
-func (h *FBSPlayHelper) ReadFbsMessage(SyncWithTimestamps bool, SpeedFactor float64) (ServerMessage, error) {
+func (h *FBSPlayHelper) ReadServerMessage(SyncWithTimestamps bool, SpeedFactor float64) (ServerMessage, error) {
 	var messageType uint8
 	//messages := make(map[uint8]ServerMessage)
 	fbs := h.Conn
@@ -190,6 +195,47 @@ func (h *FBSPlayHelper) ReadFbsMessage(SyncWithTimestamps bool, SpeedFactor floa
 	parsedMsg, err := msg.Read(fbs)
 	if err != nil {
 		logger.Error("FBSConn.NewConnHandler: Error in reading FBS message: ", err)
+		return nil, err
+	}
+
+	millisSinceStart := int(startTimeMsgHandling.UnixNano()/int64(time.Millisecond)) - h.startTime
+	adjestedTimeStamp := float64(fbs.CurrentTimestamp()) / SpeedFactor
+	millisToSleep := adjestedTimeStamp - float64(millisSinceStart)
+
+	if millisToSleep > 0 && SyncWithTimestamps {
+
+		time.Sleep(time.Duration(millisToSleep) * time.Millisecond)
+	} else if millisToSleep < -400 {
+		logger.Errorf("rendering time is noticeably off, change speedup factor: videoTimeLine: %f, currentTime:%d, offset: %f", adjestedTimeStamp, millisSinceStart, millisToSleep)
+	}
+
+	return parsedMsg, nil
+}
+
+func (h *FBSPlayHelper) ReadClientMessage(SyncWithTimestamps bool, SpeedFactor float64) (ClientMessage, error) {
+	var messageType uint8
+	//messages := make(map[uint8]ServerMessage)
+	fbs := h.Conn
+	//conn := h.Conn
+	err := binary.Read(fbs, binary.BigEndian, &messageType)
+	if err != nil {
+		logger.Error("FBSConn.NewConnHandler: Error in reading Client FBS: ", err)
+		return nil, err
+	}
+	startTimeMsgHandling := time.Now()
+	//IClientConn{}
+	//binary.Write(h.Conn, binary.BigEndian, messageType)
+	msg := h.clientMessageMap[messageType]
+	if msg == nil {
+		logger.Error("FBSConn.NewConnHandler: Error unknown Clientmessage type: ", messageType)
+		return nil, err
+	}
+	//read the actual message data
+	//err = binary.Read(fbs, binary.BigEndian, &msg)
+	fmt.Printf("The parsed message is going to be parsed.: ", msg)
+	parsedMsg, err := msg.Read(fbs)
+	if err != nil {
+		logger.Error("FBSConn.NewConnHandler: Error in reading FBS Client message: ", err)
 		return nil, err
 	}
 
