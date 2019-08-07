@@ -7,11 +7,13 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"os"
+	"path/filepath"
 
 	//"path/filepath"
 	"time"
 	//"fmt"
 
+	"github.com/sibeshkar/demoparser/encoders"
 	"github.com/sibeshkar/demoparser/logger"
 	vnc "github.com/sibeshkar/demoparser/vnc"
 )
@@ -32,48 +34,36 @@ func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedu
 
 	fastFramerate := int(float64(*framerate) * (*speedupFactor))
 
-	protoFile := filename
+	fbsFile := filename
 	logLevel := "debug"
 
-	// var logLevel = flag.String("logLevel", "info", "change logging level")
-	// var protoFile = flag.String("protoFile", "demo/proto.rbs", "file name of demonstration")
-
-	// flag.Parse()
 	logger.SetLogLevel(logLevel)
 
-	// if len(*protoFile) <= 1 {
-	// 	logger.Errorf("please provide a fbs file name")
-	// 	return nil
-	// }
-	// if _, err := os.Stat(*protoFile); os.IsNotExist(err) {
-	// 	logger.Errorf("File doesn't exist", err)
-	// 	return nil
-	// }
 	encs := []vnc.Encoding{
 		&vnc.ZRLEEncoding{},
 		&vnc.CursorPseudoEncoding{},
 	}
 
-	fbs, err := vnc.NewProtoConn(
-		protoFile,
+	fbs, err := vnc.NewFbsConn(
+		fbsFile,
 		encs,
 	)
 	if err != nil {
 		logger.Error("failed to open fbs reader:", err)
-		//return nil, err
+		return err
 	}
 
 	//launch video encoding process:
-	// vcodec := &encoders.X264ImageEncoder{FFMpegBinPath: "./ffmpeg", Framerate: framerate}
-	// //vcodec := &encoders.DV8ImageEncoder{}
-	// //vcodec := &encoders.DV9ImageEncoder{}
-	// dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	// logger.Tracef("current dir: %s", dir)
-	// go vcodec.Run("./output.mp4")
+	vcodec := &encoders.X264ImageEncoder{FFMpegBinPath: "/usr/bin/ffmpeg", Framerate: *framerate}
+	//vcodec := &encoders.DV8ImageEncoder{}
+	//vcodec := &encoders.DV9ImageEncoder{}
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	logger.Tracef("current dir: %s", dir)
+	go vcodec.Run("./output.mp4")
 
 	//screenImage := image.NewRGBA(image.Rect(0, 0, int(fbs.Width()), int(fbs.Height())))
 	screenImage := vnc.NewVncCanvas(int(fbs.Width()), int(fbs.Height()))
-	screenImage.DrawCursor = false
+	screenImage.DrawCursor = true // modify for drawing cursor
 
 	for _, enc := range encs {
 		myRenderer, ok := enc.(vnc.Renderer)
@@ -91,13 +81,12 @@ func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedu
 		for {
 			timeStart := time.Now()
 
-			//vcodec.Encode(screenImage.Image)
+			vcodec.Encode(screenImage.Image)
 
 			timeTarget := timeStart.Add(frameDuration)
 			timeLeft := timeTarget.Sub(time.Now())
 
-			writeImageToFile(screenImage.Image, timeTarget)
-
+			//writeImageToFile(screenImage.Image, timeTarget)
 			batch := DemoBatch{
 				obs:       screenImage.Image,
 				done:      false,
@@ -106,6 +95,7 @@ func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedu
 				timestamp: timeTarget.String(),
 			}
 			vnc_demo.batches = append(vnc_demo.batches, batch) //.Add(1 * time.Millisecond)
+
 			if timeLeft > 0 {
 				time.Sleep(timeLeft)
 				//logger.Error("sleeping= ", timeLeft)
@@ -113,10 +103,10 @@ func Process(filename string, vnc_demo *VNCDemonstration, framerate *int, speedu
 		}
 	}()
 
-	msgReader := vnc.NewProtoPlayer(fbs)
+	msgReader := vnc.NewFBSPlayHelper(fbs)
 	//loop over all messages, feed images to video codec:
 	for {
-		_, err := msgReader.ReadMessage(true, *speedupFactor)
+		_, err := msgReader.ReadFbsMessage(true, *speedupFactor)
 
 		//vcodec.Encode(screenImage.Image)
 		if err != nil {
@@ -137,18 +127,19 @@ func writeImageToFile(image draw.Image, timeTarget time.Time) {
 	}
 	defer f.Close()
 	jpeg.Encode(f, image, nil)
-
 }
 
 func main() {
 
 	var frameRate = flag.Int("fps", 20, "change logging level")
-	var speedup = flag.Float64("speedup", 1.0, "file name of demonstration")
+	var speedup = flag.Float64("speedup", 1.0, "speedupfactor")
 	flag.Parse()
 	vncDemo := &VNCDemonstration{}
-	err := Process("demo/proto.rbs", vncDemo, frameRate, speedup)
+	err := Process("demo/recording_1565093465/server.rbs", vncDemo, frameRate, speedup)
 	if err != nil {
 		logger.Infof("Error while processing %v", err)
 	}
-	fmt.Print(len(vncDemo.batches))
+
+	fmt.Println(len(vncDemo.batches))
+
 }
