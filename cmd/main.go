@@ -2,6 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"image"
+	"image/draw"
 	"image/jpeg"
 	"os"
 
@@ -19,32 +22,37 @@ import (
 //
 //
 
-func main() {
-	framerate := 10
-	speedupFactor := 3.0
-	fastFramerate := int(float64(framerate) * speedupFactor)
+type VNCDemonstration struct {
+	batches []DemoBatch
+}
 
-	var logLevel = flag.String("logLevel", "info", "change logging level")
-	var protoFile = flag.String("protoFile", "demo/proto.rbs", "file name of demonstration")
+type DemoBatch struct {
+	obs       image.Image
+	actions   []vnc.ClientMessage
+	done      bool
+	reward    float32
+	info      string
+	timestamp string
+}
 
-	flag.Parse()
-	logger.SetLogLevel(*logLevel)
+func ProcessFile(serverfile string, clientfile string, vnc_demo *VNCDemonstration, framerate *int, speedupFactor *float64, logLevel string) error {
 
-	if len(*protoFile) <= 1 {
-		logger.Errorf("please provide a fbs file name")
-		return
-	}
-	if _, err := os.Stat(*protoFile); os.IsNotExist(err) {
-		logger.Errorf("File doesn't exist", err)
-		return
-	}
+	fastFramerate := int(float64(*framerate) * (*speedupFactor))
+
+	logger.SetLogLevel(logLevel)
+
 	encs := []vnc.Encoding{
 		&vnc.ZRLEEncoding{},
 		&vnc.CursorPseudoEncoding{},
 	}
 
-	fbs, err := vnc.NewProtoConn(
-		*protoFile,
+	obs_fbs, err := vnc.NewProtoConn(
+		serverfile,
+		encs,
+	)
+
+	event_fbs, err := vnc.NewProtoConn(
+		clientfile,
 		encs,
 	)
 	if err != nil {
@@ -61,7 +69,9 @@ func main() {
 	// go vcodec.Run("./output.mp4")
 
 	//screenImage := image.NewRGBA(image.Rect(0, 0, int(fbs.Width()), int(fbs.Height())))
-	screenImage := vnc.NewVncCanvas(int(fbs.Width()), int(fbs.Height()))
+
+	eventBuffer := vnc.NewVncEventBuffer()
+	screenImage := vnc.NewVncCanvas(int(obs_fbs.Width()), int(obs_fbs.Height()))
 	screenImage.DrawCursor = false
 
 	for _, enc := range encs {
@@ -84,12 +94,18 @@ func main() {
 
 			timeTarget := timeStart.Add(frameDuration)
 			timeLeft := timeTarget.Sub(time.Now())
-			f, err := os.Create("imgs/img_" + timeTarget.String() + ".jpg")
-			if err != nil {
-				panic(err)
+			//writeImageToFile(screenImage.Image, timeTarget)
+			_, events := eventBuffer.Flush()
+			batch := DemoBatch{
+				obs:       screenImage.Image,
+				actions:   events,
+				done:      false,
+				reward:    0.0,
+				info:      "{}",
+				timestamp: timeTarget.String(),
 			}
-			defer f.Close()
-			jpeg.Encode(f, screenImage.Image, nil)
+			vnc_demo.batches = append(vnc_demo.batches, batch) //.Add(1 * time.Millisecond)
+
 			//.Add(1 * time.Millisecond)
 			if timeLeft > 0 {
 				time.Sleep(timeLeft)
@@ -98,15 +114,56 @@ func main() {
 		}
 	}()
 
-	msgReader := vnc.NewProtoPlayer(fbs)
+	obsMsgReader := vnc.NewProtoPlayer(obs_fbs)
+	eventMsgReader := vnc.NewProtoPlayer(event_fbs)
 	//loop over all messages, feed images to video codec:
+
+	go func() {
+		for {
+			eventMsgReader.ReadEventMessage(eventBuffer, true, *speedupFactor)
+
+			//vcodec.Encode(screenImage.Image)
+
+			//vcodec.Encode(screenImage)
+		}
+
+	}()
 	for {
-		_, err := msgReader.ReadMessage(true, speedupFactor)
+		_, err := obsMsgReader.ReadFBMessage(true, *speedupFactor)
 
 		//vcodec.Encode(screenImage.Image)
 		if err != nil {
-			os.Exit(-1)
+			return nil
 		}
 		//vcodec.Encode(screenImage)
 	}
+}
+
+func writeImageToFile(image draw.Image, timeTarget time.Time) {
+	f, err := os.Create("imgs/img_" + timeTarget.String() + ".jpg")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	jpeg.Encode(f, image, nil)
+}
+
+func main() {
+
+	var frameRate = flag.Int("fps", 20, "change logging level")
+	var speedup = flag.Float64("speedup", 1.0, "speedupfactor")
+	flag.Parse()
+	vncDemo := &VNCDemonstration{}
+	err := ProcessFile("demo/recording_1565211076/server.rbs", "demo/recording_1565211076/client.rbs", vncDemo, frameRate, speedup, "debug")
+	if err != nil {
+		logger.Infof("Error while processing %v", err)
+	}
+
+	fmt.Println(len(vncDemo.batches))
+
+	for _, batch := range vncDemo.batches {
+		fmt.Println(batch.actions, len(batch.actions))
+
+	}
+
 }

@@ -3,15 +3,14 @@ package vnc
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
+	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"os"
 
 	//"vncproxy/common"
 	//"vncproxy/encodings"
-	"github.com/golang/protobuf/proto"
+
+	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/sibeshkar/demoparser/logger"
 	pb "github.com/sibeshkar/vncproxy/proto"
 	//"vncproxy/encodings"
@@ -19,36 +18,63 @@ import (
 )
 
 type ProtoReader struct {
-	demonstration    *pb.Demonstration
+	reader           *os.File
 	currentTimestamp int
-	index            int
-	maxLen           int
 }
 
 func NewProtoReader(filename string) (*ProtoReader, error) {
 
-	in, err := ioutil.ReadFile(filename)
+	reader, err := os.OpenFile(filename, os.O_RDWR, 0644)
 	if err != nil {
-		log.Fatalln("Error reading file:", err)
-	}
-	demonstration := &pb.Demonstration{}
-	if err := proto.Unmarshal(in, demonstration); err != nil {
-		log.Fatalln("Failed to parse demonstration file:", err)
-	}
-	len := len(demonstration.Fbupdates)
+		logger.Errorf("unable to open file: %s, error: %v", filename, err)
 
-	return &ProtoReader{demonstration: demonstration, index: 0, maxLen: len}, err
+	}
+
+	return &ProtoReader{reader: reader}, err
 }
 
-func (rbs *ProtoReader) ReadFbUpdate() (*pb.FramebufferUpdate, error) {
-	if rbs.index < rbs.maxLen {
-		fbupdate := rbs.demonstration.Fbupdates[rbs.index]
-		rbs.currentTimestamp = int(rbs.demonstration.Initmsg.GetStartTime() + fbupdate.GetTimestamp())
-		rbs.index += 1
-		return fbupdate, nil
-	} else {
-		return nil, errors.New("Out of FB Updates")
+func (rbs *ProtoReader) ReadFbUpdate() (*pb.FramebufferUpdate, int, error) {
+	fbupdate := &pb.FramebufferUpdate{}
+	len, err := pbutil.ReadDelimited(rbs.reader, fbupdate)
+	{
+
 	}
+	return fbupdate, len, err
+
+}
+
+func (rbs *ProtoReader) ReadEventUpdate() (ClientMessage, int, uint32, error) {
+	msgType := &pb.MessageType{}
+	var eventBlank ClientMessage
+	var timestamp uint32
+	var len int
+	var err error
+	pbutil.ReadDelimited(rbs.reader, msgType)
+	if msgType.GetType() == uint32(4) {
+		event := &pb.KeyEvent{}
+		len, err = pbutil.ReadDelimited(rbs.reader, event)
+		key_event := KeyEvent{
+			Down: uint8(event.GetDown()),
+			Key:  Key(event.GetKey()),
+		}
+		timestamp = event.GetTimestamp()
+		fmt.Printf("Key event is %v", key_event)
+		return &key_event, len, timestamp, err
+	} else if msgType.GetType() == uint32(5) {
+		event := &pb.PointerEvent{}
+		len, err = pbutil.ReadDelimited(rbs.reader, event)
+		pointer_event := PointerEvent{
+			Mask: uint8(event.GetMask()),
+			X:    uint16(event.GetX()),
+			Y:    uint16(event.GetY()),
+		}
+		timestamp = event.GetTimestamp()
+		fmt.Println("Pointer event is ", pointer_event)
+		return &pointer_event, len, timestamp, err
+
+	}
+
+	return eventBlank, len, timestamp, err
 
 }
 
@@ -68,22 +94,23 @@ func (rbs *ProtoReader) CurrentTimestamp() int {
 
 func (rbs *ProtoReader) ReadStartSession() (*ServerInit, error) {
 	initMsg := &ServerInit{}
-	demo := rbs.demonstration
+	initMsgRead := &pb.InitMsg{}
+	pbutil.ReadDelimited(rbs.reader, initMsgRead)
 
-	initMsg.FBWidth = uint16(demo.Initmsg.GetFBWidth())
-	initMsg.FBHeight = uint16(demo.Initmsg.GetFBHeight())
-	initMsg.NameText = []byte(demo.Initmsg.GetDesktopName())
+	initMsg.FBWidth = uint16(initMsgRead.GetFBWidth())
+	initMsg.FBHeight = uint16(initMsgRead.GetFBHeight())
+	initMsg.NameText = []byte(initMsgRead.GetDesktopName())
 	initMsg.PixelFormat = PixelFormat{
-		BPP:        uint8(demo.Initmsg.PixelFormat.GetBPP()),
-		Depth:      uint8(demo.Initmsg.PixelFormat.GetDepth()),
-		BigEndian:  uint8(demo.Initmsg.PixelFormat.GetBigEndian()),
-		TrueColor:  uint8(demo.Initmsg.PixelFormat.GetTrueColor()),
-		RedMax:     uint16(demo.Initmsg.PixelFormat.GetRedMax()),
-		GreenMax:   uint16(demo.Initmsg.PixelFormat.GetGreenMax()),
-		BlueMax:    uint16(demo.Initmsg.PixelFormat.GetBlueMax()),
-		RedShift:   uint8(demo.Initmsg.PixelFormat.GetRedShift()),
-		BlueShift:  uint8(demo.Initmsg.PixelFormat.GetRedShift()),
-		GreenShift: uint8(demo.Initmsg.PixelFormat.GetRedShift()),
+		BPP:        uint8(initMsgRead.PixelFormat.GetBPP()),
+		Depth:      uint8(initMsgRead.PixelFormat.GetDepth()),
+		BigEndian:  uint8(initMsgRead.PixelFormat.GetBigEndian()),
+		TrueColor:  uint8(initMsgRead.PixelFormat.GetTrueColor()),
+		RedMax:     uint16(initMsgRead.PixelFormat.GetRedMax()),
+		GreenMax:   uint16(initMsgRead.PixelFormat.GetGreenMax()),
+		BlueMax:    uint16(initMsgRead.PixelFormat.GetBlueMax()),
+		RedShift:   uint8(initMsgRead.PixelFormat.GetRedShift()),
+		BlueShift:  uint8(initMsgRead.PixelFormat.GetRedShift()),
+		GreenShift: uint8(initMsgRead.PixelFormat.GetRedShift()),
 	}
 
 	// fmt.Printf("FBHeight: %v \n", demo.Initmsg.GetFBHeight())

@@ -101,10 +101,39 @@ func NewProtoPlayer(r *ProtoConn) *ProtoPlayHelper {
 	return h
 }
 
-//This will be looped multiple times in the main
-func (h *ProtoPlayHelper) ReadMessage(SyncWithTimestamps bool, SpeedFactor float64) (*FramebufferUpdate, error) {
+func (h *ProtoPlayHelper) ReadEventMessage(batch *VncEventBuffer, SyncWithTimestamps bool, SpeedFactor float64) (ClientMessage, error) {
 	rbs := h.Conn
-	fbUpdate, err := rbs.ProtoReader.ReadFbUpdate()
+	event, _, timestamp, err := rbs.ProtoReader.ReadEventUpdate()
+
+	if err != nil {
+		logger.Errorf("Error occurred while reading ProtoReader client file %v", err)
+		return nil, err
+	}
+
+	startTimeMsgHandling := time.Now()
+
+	fbupdateTimestamp := timestamp
+
+	millisSinceStart := int(startTimeMsgHandling.UnixNano()/int64(time.Millisecond)) - h.startTime
+
+	adjustedTimeStamp := float64(fbupdateTimestamp) / SpeedFactor
+
+	millisToSleep := adjustedTimeStamp - float64(millisSinceStart)
+
+	if millisToSleep > 0 {
+		time.Sleep(time.Duration(millisToSleep) * time.Millisecond)
+	}
+
+	batch.Push(event)
+
+	return event, err
+
+}
+
+//This will be looped multiple times in the main
+func (h *ProtoPlayHelper) ReadFBMessage(SyncWithTimestamps bool, SpeedFactor float64) (*FramebufferUpdate, error) {
+	rbs := h.Conn
+	fbUpdate, _, err := rbs.ProtoReader.ReadFbUpdate()
 	if err != nil {
 		logger.Errorf("Error occurred while reading ProtoReader %v", err)
 		return nil, err
