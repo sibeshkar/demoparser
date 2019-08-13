@@ -2,7 +2,7 @@ build:
 	go build -o ./bin/demoparser ./cmd/
 
 run:
-	./bin/demoparser -logLevel=debug -protoFile=demo/proto.rbs
+	./bin/demoparser -fps=20 -speedup=1.0
 
 clean:
 	rm -rf imgs/*

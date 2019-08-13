@@ -1,0 +1,21 @@
+syntax = "proto3";
+package proto;
+
+message Demonstration{
+    repeated Batch batches = 1;
+}
+
+message Batch {
+    repeated Events iterators = 1;
+    uint32 timestamp =2;
+}
+
+message Events {
+    string type = 2;
+    repeated Event events = 1;
+
+}
+
+message Event {
+    bytes event = 1;
+}

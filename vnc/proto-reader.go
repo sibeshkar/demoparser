@@ -12,6 +12,7 @@ import (
 
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/sibeshkar/demoparser/logger"
+	"github.com/sibeshkar/jiminy-env/shared"
 	pb "github.com/sibeshkar/vncproxy/proto"
 	//"vncproxy/encodings"
 	//"vncproxy/encodings"
@@ -35,6 +36,16 @@ func NewProtoReader(filename string) (*ProtoReader, error) {
 
 func (rbs *ProtoReader) ReadFbUpdate() (*pb.FramebufferUpdate, int, error) {
 	fbupdate := &pb.FramebufferUpdate{}
+	len, err := pbutil.ReadDelimited(rbs.reader, fbupdate)
+	{
+
+	}
+	return fbupdate, len, err
+
+}
+
+func (rbs *ProtoReader) ReadMessageUpdate() (*shared.Message, int, error) {
+	fbupdate := &shared.Message{}
 	len, err := pbutil.ReadDelimited(rbs.reader, fbupdate)
 	{
 
