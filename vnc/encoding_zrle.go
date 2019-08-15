@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"compress/zlib"
 	"errors"
-	"fmt"
 	"image/color"
 	"image/draw"
 	"io"
 
-	"github.com/amitbet/vnc2video/logger"
+	"github.com/sibeshkar/demoparser/logger"
 )
 
 type ZRLEEncoding struct {
@@ -59,7 +58,7 @@ func CalcBytesPerCPixel(pf *PixelFormat) int {
 }
 
 func (enc *ZRLEEncoding) Read(r Conn, rect *Rectangle) error {
-	fmt.Printf("reading ZRLE:%v\n", rect)
+	logger.Debugf("reading ZRLE:%v\n", rect)
 	len, err := ReadUint32(r)
 	if err != nil {
 		return err
@@ -88,7 +87,7 @@ func (enc *ZRLEEncoding) Read(r Conn, rect *Rectangle) error {
 }
 
 func (enc *ZRLEEncoding) ReadBytes(b []byte, r Conn, rect *Rectangle) error {
-	fmt.Printf("reading ZRLE:%v\n", rect)
+	logger.Debugf("reading ZRLE:%v\n", rect)
 	var err error
 	bytesBuff := bytes.NewBuffer(b)
 

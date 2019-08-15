@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sibeshkar/demoparser/logger"
+	pb_demo "github.com/sibeshkar/demoparser/proto"
 )
 
 type ProtoConn struct {
@@ -15,6 +16,7 @@ type ProtoConn struct {
 	fbWidth     uint16
 	desktopName string
 	pixelFormat PixelFormat
+	startTime   uint32
 }
 
 func (c *ProtoConn) Conn() net.Conn {
@@ -65,25 +67,40 @@ func (c *ProtoConn) GetEncInstance(typ EncodingType) Encoding {
 	return nil
 }
 
-func NewProtoConn(filename string, encs []Encoding) (*ProtoConn, error) {
+func (c *ProtoConn) GetStartTime() uint32 {
+	return c.startTime
+}
+
+func NewProtoConn(filename string, encs []Encoding, readStart bool) (*ProtoConn, error) {
 	rbs, err := NewProtoReader(filename)
 	if err != nil {
 		logger.Error("failed to open fbs reader:", err)
 		return nil, err
 	}
 
-	initMsg, err := rbs.ReadStartSession()
-	if err != nil {
-		logger.Error("failed to open read fbs start session:", err)
-		return nil, err
-	}
-
 	rbsConn := &ProtoConn{ProtoReader: *rbs}
 	rbsConn.encodings = encs
-	rbsConn.SetPixelFormat(initMsg.PixelFormat)
-	rbsConn.SetHeight(initMsg.FBHeight)
-	rbsConn.SetWidth(initMsg.FBWidth)
-	rbsConn.SetDesktopName([]byte(initMsg.NameText))
+
+	rbsConn.startTime, err = rbs.ReadStartTime()
+
+	if err != nil {
+		logger.Error("Error reading starTime", err)
+	}
+
+	if readStart {
+		initMsg, err := rbs.ReadStartSession()
+		if err != nil {
+			logger.Error("failed to open read fbs start session:", err)
+			return nil, err
+		}
+
+		rbsConn.SetPixelFormat(initMsg.PixelFormat)
+		rbsConn.SetHeight(initMsg.FBHeight)
+		rbsConn.SetWidth(initMsg.FBWidth)
+		rbsConn.SetDesktopName([]byte(initMsg.NameText))
+
+	}
+
 	return rbsConn, nil
 }
 
@@ -99,6 +116,37 @@ func NewProtoPlayer(r *ProtoConn) *ProtoPlayHelper {
 	h := &ProtoPlayHelper{Conn: r}
 	h.startTime = int(time.Now().UnixNano() / int64(time.Millisecond))
 	return h
+}
+
+func (h *ProtoPlayHelper) ReadRecordMessage(batch *VncRecordBuffer, SyncWithTimestamps bool, SpeedFactor float64) (pb_demo.Message, error) {
+	rbs := h.Conn
+	event, _, timestamp, err := rbs.ProtoReader.ReadRecordUpdate()
+
+	//logger.Errorf("Record event readed is %v", event)
+
+	if err != nil {
+		logger.Errorf("Error occurred while reading ProtoReader Record file %v", err)
+		return event, err
+	}
+
+	startTimeMsgHandling := time.Now()
+
+	fbupdateTimestamp := timestamp
+
+	millisSinceStart := int(startTimeMsgHandling.UnixNano()/int64(time.Millisecond)) - h.startTime
+
+	adjustedTimeStamp := float64(fbupdateTimestamp) / SpeedFactor
+
+	millisToSleep := adjustedTimeStamp - float64(millisSinceStart)
+
+	if millisToSleep > 0 {
+		time.Sleep(time.Duration(millisToSleep) * time.Millisecond)
+	}
+	//time.Sleep(50 * time.Millisecond)
+	batch.Push(event)
+
+	return event, err
+
 }
 
 func (h *ProtoPlayHelper) ReadEventMessage(batch *VncEventBuffer, SyncWithTimestamps bool, SpeedFactor float64) (ClientMessage, error) {

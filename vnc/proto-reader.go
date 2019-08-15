@@ -3,7 +3,6 @@ package vnc
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"os"
 
@@ -12,7 +11,7 @@ import (
 
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/sibeshkar/demoparser/logger"
-	"github.com/sibeshkar/jiminy-env/shared"
+	pb_demo "github.com/sibeshkar/demoparser/proto"
 	pb "github.com/sibeshkar/vncproxy/proto"
 	//"vncproxy/encodings"
 	//"vncproxy/encodings"
@@ -44,16 +43,6 @@ func (rbs *ProtoReader) ReadFbUpdate() (*pb.FramebufferUpdate, int, error) {
 
 }
 
-func (rbs *ProtoReader) ReadMessageUpdate() (*shared.Message, int, error) {
-	fbupdate := &shared.Message{}
-	len, err := pbutil.ReadDelimited(rbs.reader, fbupdate)
-	{
-
-	}
-	return fbupdate, len, err
-
-}
-
 func (rbs *ProtoReader) ReadEventUpdate() (ClientMessage, int, uint32, error) {
 	msgType := &pb.MessageType{}
 	var eventBlank ClientMessage
@@ -69,7 +58,7 @@ func (rbs *ProtoReader) ReadEventUpdate() (ClientMessage, int, uint32, error) {
 			Key:  Key(event.GetKey()),
 		}
 		timestamp = event.GetTimestamp()
-		fmt.Printf("Key event is %v", key_event)
+		//fmt.Printf("Key event is %v", key_event)
 		return &key_event, len, timestamp, err
 	} else if msgType.GetType() == uint32(5) {
 		event := &pb.PointerEvent{}
@@ -80,12 +69,25 @@ func (rbs *ProtoReader) ReadEventUpdate() (ClientMessage, int, uint32, error) {
 			Y:    uint16(event.GetY()),
 		}
 		timestamp = event.GetTimestamp()
-		fmt.Println("Pointer event is ", pointer_event)
+		//fmt.Println("Pointer event is ", pointer_event)
 		return &pointer_event, len, timestamp, err
 
 	}
 
 	return eventBlank, len, timestamp, err
+
+}
+
+func (rbs *ProtoReader) ReadRecordUpdate() (pb_demo.Message, int, uint32, error) {
+	msg := &pb_demo.Message{}
+	var timestamp uint32
+	var len int
+	var err error
+	len, err = pbutil.ReadDelimited(rbs.reader, msg)
+
+	timestamp = msg.GetTimestamp()
+
+	return *msg, len, timestamp, err
 
 }
 
@@ -101,6 +103,14 @@ func (fbs *ProtoReader) Write(p []byte) (n int, err error) {
 
 func (rbs *ProtoReader) CurrentTimestamp() int {
 	return rbs.currentTimestamp
+}
+
+func (rbs *ProtoReader) ReadStartTime() (uint32, error) {
+
+	startTime := &pb_demo.StartTime{}
+	_, err := pbutil.ReadDelimited(rbs.reader, startTime)
+	return startTime.GetTime(), err
+
 }
 
 func (rbs *ProtoReader) ReadStartSession() (*ServerInit, error) {
