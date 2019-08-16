@@ -1,19 +1,25 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"image/draw"
 	"image/jpeg"
+	"io/ioutil"
+	"log"
 	"os"
+	"strconv"
 
 	//"path/filepath"
 	"time"
 	//"fmt"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/sibeshkar/demoparser/logger"
 	pb_demo "github.com/sibeshkar/demoparser/proto"
+	"github.com/sibeshkar/demoparser/utils"
 	vnc "github.com/sibeshkar/demoparser/vnc"
 	//"github.com/sibeshkar/vncproxy/logger"
 	//"github.com/amitbet/vnc2video/encoders"
@@ -56,7 +62,7 @@ func ProcessFile(serverfile string, clientfile string, recordfile string, vnc_de
 		//return nil, err
 	}
 
-	fmt.Printf("The times are: %v, %v, %v", record_fbs.GetStartTime(), event_fbs.GetStartTime(), obs_fbs.GetStartTime())
+	//fmt.Printf("The times are: %v, %v, %v", record_fbs.GetStartTime(), event_fbs.GetStartTime(), obs_fbs.GetStartTime())
 
 	//launch video encoding process:
 	// vcodec := &encoders.X264ImageEncoder{FFMpegBinPath: "./ffmpeg", Framerate: framerate}
@@ -99,7 +105,7 @@ func ProcessFile(serverfile string, clientfile string, recordfile string, vnc_de
 			_, events := eventBuffer.Flush()
 			_, records := recordBuffer.Flush()
 
-			obs_event, _ := returnEvent("obs", screenImage)
+			obs_event, _ := returnImage("obs", &screenImage.Image)
 			action_event, _ := returnEvent("actions", events)
 			record_event, _ := returnEvent("records", records)
 
@@ -165,24 +171,37 @@ func main() {
 
 	var frameRate = flag.Int("fps", 20, "the fps")
 	var speedup = flag.Float64("speedup", 1.0, "speedupfactor")
-	var logLevel = flag.String("logLevel", "info", "speedupfactor")
+	var directory = flag.String("directory", "demo/recording_1565930", "record directory")
+	var logLevel = flag.String("logLevel", "info", "log level")
+
 	flag.Parse()
+	fileDir := utils.AbsPathify(*directory)
 	vncDemo := &pb_demo.Demonstration{}
-	err := ProcessFile("demo/recording_1565842338/server.rbs", "demo/recording_1565842338/client.rbs", "demo/recording_1565842338/record.rbs", vncDemo, frameRate, speedup, *logLevel)
+	err := ProcessFile(fileDir+"/server.rbs", fileDir+"/client.rbs", fileDir+"/record.rbs", vncDemo, frameRate, speedup, *logLevel)
 
 	if err != nil {
 		logger.Infof("Error while processing %v", err)
 	}
-	i := 0
-	for _, batch := range vncDemo.Batches {
-		fmt.Println("---------BATCH NUMBER------", i)
-		fmt.Print(batch.GetIterators()[1].GetEvents())
-		i += 1
-		if i == 10 {
-			break
-		}
-		//time.Sleep(1 * time.Second)
-	}
+	// i := 0
+	// for _, batch := range vncDemo.Batches {
+	// 	fmt.Println("---------BATCH NUMBER------", i)
+	// 	fmt.Print(batch.GetIterators()[1].GetEvents())
+	// 	i += 1
+	// 	//time.Sleep(1 * time.Second)
+	// }
+
+	writeDemoFile(vncDemo)
+
+	// in, err := ioutil.ReadFile(fname)
+	// if err != nil {
+	// 	log.Fatalln("Error reading file:", err)
+	// }
+	// book := &pb_demo.Demonstration{}
+	// if err := proto.Unmarshal(in, book); err != nil {
+	// 	log.Fatalln("Failed to parse address book:", err)
+	// }
+
+	// fmt.Print("Length of Demonstrations is :", len(book.GetBatches()))
 	//
 	// for _, batch := range vncDemo.Batches {
 	// 	fmt.Println("---------BATCH NUMBER------", i)
@@ -193,6 +212,22 @@ func main() {
 	// 	}
 	// 	i += 1
 	// }
+
+}
+
+func writeDemoFile(vncDemo *pb_demo.Demonstration) {
+
+	out, err := proto.Marshal(vncDemo)
+	if err != nil {
+		log.Fatalln("Failed to encode address book:", err)
+	}
+
+	fname := "demo_" + strconv.FormatInt(time.Now().Unix(), 10) + ".rbs"
+	if err := ioutil.WriteFile(fname, out, 0644); err != nil {
+		log.Fatalln("Failed to write address book:", err)
+	}
+
+	fmt.Println(fname)
 
 }
 
@@ -215,6 +250,25 @@ func returnEvent(event_type string, events ...interface{}) (*pb_demo.Events, err
 		pb_events.Events = append(pb_events.Events, pb_event)
 
 	}
+
+	return pb_events, err
+}
+
+func returnImage(event_type string, img *draw.Image) (*pb_demo.Events, error) {
+	pb_events := &pb_demo.Events{
+		Type: event_type,
+	}
+
+	var err error
+
+	buf := new(bytes.Buffer)
+	err = jpeg.Encode(buf, *img, nil)
+
+	pb_event := &pb_demo.Event{
+		Event: buf.Bytes(),
+	}
+
+	pb_events.Events = append(pb_events.Events, pb_event)
 
 	return pb_events, err
 }

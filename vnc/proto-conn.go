@@ -81,8 +81,6 @@ func NewProtoConn(filename string, encs []Encoding, readStart bool) (*ProtoConn,
 	rbsConn := &ProtoConn{ProtoReader: *rbs}
 	rbsConn.encodings = encs
 
-	rbsConn.startTime, err = rbs.ReadStartTime()
-
 	if err != nil {
 		logger.Error("Error reading starTime", err)
 	}
